@@ -6,7 +6,7 @@ from dolfinx.fem import Constant, Expression, Function,dirichletbc, locate_dofs_
 from dolfinx.fem.petsc import LinearProblem
 from petsc4py.PETSc import ScalarType
 from ufl import FacetNormal, SpatialCoordinate, TestFunction,TrialFunction, ds, dx, grad, inner
-
+import numpy as np
 
 # ------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------
@@ -19,6 +19,7 @@ def update_mesh(md,t,dt):
 
     # solve for slope at surfaces (first component of normal vector)
     # and interpolate onto enitire domain
+    # NOTE: define get_slope function...
     n0 = FacetNormal(md.domain)[0]
     u_ = TrialFunction(md.V0)
     v_ = TestFunction(md.V0)
@@ -31,6 +32,7 @@ def update_mesh(md,t,dt):
     disp_h = dt*(md.sol.sub(0).sub(1) - md.sol.sub(0).sub(0)*(-n0) + md.smb_surf(x[0],t))
     disp_s = dt*(md.sol.sub(0).sub(1) - md.sol.sub(0).sub(0)*n0 + md.smb_base(x[0],t))
 
+    # NOTE: initialize functions and expressions in module 
     disp_h_fcn = Function(md.V0)
     disp_s_fcn = Function(md.V0)
     
@@ -59,4 +61,16 @@ def update_mesh(md,t,dt):
 
     md.domain.geometry.x[:,1] += displacement.x.array
 
-    return 
+def get_surfaces(X,Z):
+    # retrieve numpy arrays of the upper and lower surface elevations
+    x = np.sort(X)
+    z = Z[np.argsort(X)]
+    x_surfs = np.unique(X)
+    h = np.zeros(x_surfs.size)      # upper surface elevation
+    s = np.zeros(x_surfs.size)      # lower surface elevation
+
+    for i in range(h.size):
+        h[i] = np.max(z[np.where(np.isclose(x_surfs[i],x))])
+        s[i] = np.min(z[np.where(np.isclose(x_surfs[i],x))])
+
+    return h,s,x_surfs

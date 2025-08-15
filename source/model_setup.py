@@ -27,13 +27,14 @@ class model_setup:
         # Domain, mesh, function spaces
         self.domain = domain
         self.x = self.domain.geometry.x[:,0]
-        self.z = self.domain.geometry.x[:,1]
+        self.z = self.domain.geometry.x[:,1]        
         
         P1 = element('P',self.domain.basix_cell(),1)     # Pressure p  
         P2_vec = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # Velocity u
         self.V = functionspace(self.domain,mixed_element([P2_vec,P1]))  # Function space for (u,p)
         self.V0 = functionspace(self.domain, ("CG", 1))
-        self.mask = self.ghost_mask(self.V0) 
+        self.mask = self.ghost_mask(self.V0.dofmap.index_map) 
+        self.mask_cells = self.ghost_mask(self.domain.topology.index_map(self.domain.topology.dim))
         
         # define solution function and set initial conditions
         # sol = ((u,w),p)
@@ -64,13 +65,33 @@ class model_setup:
         self.facets_right = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.RightBoundary(x))
         self.facets_top = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.TopBoundary(x))
         self.facets_base = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.BaseBoundary(x))
-       
-    def ghost_mask(self, V):
-        ghosts = V.dofmap.index_map.ghosts
-        global_to_local = V.dofmap.index_map.global_to_local
+        
+    
+    def save_dofmap(self):
+        # Extract the local geometry dofmap for owned cells
+        local_geom_dofmap = self.domain.geometry.dofmap
+
+        # Access the index map for geometry dofs
+        imap = self.domain.geometry.index_map()
+
+        # Build local-to-global mapping for coordinate dofs
+        local_to_global = np.empty(imap.size_local + imap.num_ghosts, dtype=np.int32)
+        local_to_global[:imap.size_local] = np.arange(*imap.local_range)
+        local_to_global[imap.size_local:] = imap.ghosts
+
+        # Map local dofs in the geometry dofmap to global indices
+        global_geom_dofmap = local_to_global[local_geom_dofmap]
+        all_dofmaps = self.comm.gather(global_geom_dofmap[self.mask_cells], root=0)
+        if self.rank == 0:
+            full_global_dofmap = np.concatenate(all_dofmaps)            
+            np.save(self.results_name+'/dofmap.npy',full_global_dofmap)
+                      
+    def ghost_mask(self, index_map):
+        ghosts = index_map.ghosts
+        global_to_local = index_map.global_to_local
         ghosts_local = global_to_local(ghosts)
-        size_local = V.dofmap.index_map.size_local
-        num_ghosts = V.dofmap.index_map.num_ghosts
+        size_local = index_map.size_local
+        num_ghosts = index_map.num_ghosts
         mask = np.ones(size_local+num_ghosts,dtype=bool)
         mask[ghosts_local] = False
         return mask

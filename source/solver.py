@@ -6,6 +6,7 @@ import sys
 import os
 import shutil
 from pathlib import Path
+from mesh_routine import get_surfaces
 
 def solve(md):
     # solve the hydrology problem given setup file
@@ -44,14 +45,15 @@ def solve(md):
     # save nodes so that in post-processing we can create a
     # parallel-to-serial mapping between dof's for plotting
     nodes_x = md.comm.gather(md.x[md.mask],root=0)
-    nodes_z = md.comm.gather(md.z[md.mask],root=0) #NOTE: save z's at each time?
-    # NOTE: md.domain.geometry.dofmap
-
+    nodes_z = md.comm.gather(md.z[md.mask],root=0) 
+    md.save_dofmap()
+    
     if md.rank == 0:
         # some io setup
         parent_dir = str((Path(__file__).resolve()).parent.parent)
         nodes_x = np.concatenate(nodes_x)
         nodes_z = np.concatenate(nodes_z)
+        
         nti = int(nt/md.nt_save)
         t_i = np.linspace(0,md.timesteps.max(),nti)
         nd = md.V0.dofmap.index_map.size_global
@@ -62,6 +64,12 @@ def solve(md):
         p_arr = np.zeros((nti,nd))
         z_arr = np.zeros((nti,nd))
         
+        h,s,x_surfs = get_surfaces(nodes_x,nodes_z)        
+        ns = h.size
+        h_arr = np.zeros((nti,ns))
+        s_arr = np.zeros((nti,ns))
+        x_arr = np.zeros((nti,ns))
+        
         np.save(md.results_name+'/t.npy',t_i)
         np.save(md.results_name+'/nodes_x.npy',nodes_x)
         np.save(md.results_name+'/nodes_z.npy',nodes_z)
@@ -71,14 +79,13 @@ def solve(md):
         shutil.copy(parent_dir+'/setups/{}.py'.format(md.setup_name), md.results_name+'/{}.py'.format(md.setup_name))
         j = 0 # index for saving results at nt_save time intervals
 
-
     # create dolfinx expressions for interpolating water flux
     u_expr = Expression(md.sol.sub(0).sub(0), md.V0.element.interpolation_points())
     w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points())
     p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points())
     
     solver = md.stokes_solver(dt)
-        
+    
     # time-stepping loop
     for i in range(nt):
 
@@ -107,12 +114,23 @@ def solve(md):
             u__ = md.comm.gather(md.u.x.array[md.mask],root=0)
             w__ = md.comm.gather(md.w.x.array[md.mask],root=0)
             p__ = md.comm.gather(md.p.x.array[md.mask],root=0)
-
+            z__ = md.comm.gather(md.z[md.mask],root=0)
+            x__ = md.comm.gather(md.x[md.mask],root=0)
+            
             if md.rank == 0:
+                z__ = np.concatenate(z__)
+                x__ = np.concatenate(x__)
+                
+                h,s,x_surfs = get_surfaces(x__,z__)  
+                h_arr[j,:] = h
+                s_arr[j,:] = s
+                x_arr[j,:] = x_surfs
+
                 # save the dof's as numpy arrays
                 u_arr[j,:] = np.concatenate(u__)
                 w_arr[j,:] = np.concatenate(w__)
                 p_arr[j,:] = np.concatenate(p__)
+                z_arr[j,:] = z__
                 
                 if i % md.nt_check == 0:
                 # checkpoint saves: e.g., to not wait until
@@ -120,16 +138,25 @@ def solve(md):
                     np.save(md.results_name+f'/u.npy',u_arr)
                     np.save(md.results_name+f'/w.npy',w_arr)
                     np.save(md.results_name+f'/p.npy',p_arr)
-
+                    np.save(md.results_name+f'/nodes_z.npy',z_arr)
+                    np.save(md.results_name+f'/h.npy',h_arr)
+                    np.save(md.results_name+f'/s.npy',s_arr)
+                    np.save(md.results_name+f'/x.npy',x_arr)
+                    
                 j += 1
  
         # update the domain
-        md.update_mesh(md.timesteps[i],dt_)     
+        md.update_mesh(md.timesteps[i],dt_)
+                     
     
     # post-processing: put time-slices into big arrays
     if md.rank == 0:
         np.save(md.results_name+f'/u.npy',u_arr)
         np.save(md.results_name+f'/w.npy',w_arr)
         np.save(md.results_name+f'/p.npy',p_arr)
-    
+        np.save(md.results_name+f'/nodes_z.npy',z_arr)
+        np.save(md.results_name+f'/h.npy',h_arr)
+        np.save(md.results_name+f'/s.npy',s_arr)
+        np.save(md.results_name+f'/x.npy',x_arr)
+        
     return 

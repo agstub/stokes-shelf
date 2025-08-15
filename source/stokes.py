@@ -8,7 +8,7 @@ from params import rho_i, rho_w,g
 
 
 def eta(u):
-    return 5e14
+    return 1e14
 
 def get_bcs(md):
     # assign Dirichlet boundary conditions on lateral boundaries
@@ -52,13 +52,15 @@ def stokes_solver(md,dt):
         problem = NonlinearProblem(F, md.sol, bcs=bcs)
         solver = NewtonSolver(md.comm, problem)
         
-        solver.convergence_criterion = 'residual'
-        ksp = solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly" #preonly / cg?
-        opts[f"{option_prefix}pc_type"] = "lu" # ksp ?
-        opts[f"{option_prefix}pc_factor_mat_solver_type"]="mumps"
-        ksp.setFromOptions()
+        # NOTE: this seems to be necessary for first time step...
+        # but may not be optimal ... 
+        # solver.convergence_criterion = 'residual'
+        # ksp = solver.krylov_solver
+        # opts = PETSc.Options()
+        # option_prefix = ksp.getOptionsPrefix()
+        # opts[f"{option_prefix}ksp_type"] = "preonly" #preonly / cg?
+        # opts[f"{option_prefix}pc_type"] = "lu" # ksp ?
+        # opts[f"{option_prefix}pc_factor_mat_solver_type"]="mumps"
+        # ksp.setFromOptions()
 
         return solver
