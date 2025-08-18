@@ -1,5 +1,5 @@
-# This is a wrapper for solving the SHAKTI hydrology problem from command line with MPI
-# See setup.py for exanples of model setup options like bed and surface geometry,
+# This is a wrapper for solving the ice-shelf stokes-flow problem from command line with MPI
+# See setup_example.py for an exanple of model setup options like bed and surface geometry,
 # meltwater inputs, mesh creation, etc...
 
 import sys

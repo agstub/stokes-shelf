@@ -5,16 +5,8 @@ from dolfinx.mesh import locate_entities, meshtags
 from solver import solve
 from stokes import stokes_solver
 from dolfinx.mesh import locate_entities_boundary
-from mesh_routine import update_mesh
-
-def get_nested_attr(obj, attr_path):
-    for attr in attr_path.split('.'):
-        obj = getattr(obj, attr)
-    return obj
-
-def set_array_slice(obj, attr_path, values):
-    arr = get_nested_attr(obj, attr_path)
-    arr[:] = values
+from mesh_routine import mesh_solver, slope_solver
+import params
 
 # model input class file
 class model_setup:
@@ -29,9 +21,9 @@ class model_setup:
         self.x = self.domain.geometry.x[:,0]
         self.z = self.domain.geometry.x[:,1]        
         
-        P1 = element('P',self.domain.basix_cell(),1)     # Pressure p  
-        P2_vec = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # Velocity u
-        self.V = functionspace(self.domain,mixed_element([P2_vec,P1]))  # Function space for (u,p)
+        p_el = element('P',self.domain.basix_cell(),1)     # Pressure p  
+        u_el = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # Velocity u
+        self.V = functionspace(self.domain,mixed_element([u_el,p_el]))  # Function space for (u,p)
         self.V0 = functionspace(self.domain, ("CG", 1))
         self.mask = self.ghost_mask(self.V0.dofmap.index_map) 
         self.mask_cells = self.ghost_mask(self.domain.topology.index_map(self.domain.topology.dim))
@@ -44,6 +36,11 @@ class model_setup:
         self.u = Function(self.V0)
         self.w = Function(self.V0)
         self.p = Function(self.V0)
+        
+        # functions for updating mesh
+        self.slope = Function(self.V0)
+        self.dh = Function(self.V0)
+        self.ds = Function(self.V0)
 
         # Physical input functions
         self.z_b = z_b                   # initial bed elevation [m]
@@ -66,6 +63,13 @@ class model_setup:
         self.facets_top = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.TopBoundary(x))
         self.facets_base = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.BaseBoundary(x))
         
+        # physical constants
+        self.A = params.A         # ice rigidity
+        self.n = params.n         # flow-law exponent
+        self.g = params.g         # gravitional acceleration
+        self.rho_i = params.rho_i # ice density
+        self.rho_w = params.rho_w # water density
+        self.delta = params.delta # flotation factor
     
     def save_dofmap(self):
         # Extract the local geometry dofmap for owned cells
@@ -141,10 +145,11 @@ class model_setup:
     def solve(self):
         solve(self)
         
-    def update_mesh(self,t,dt):
-        update_mesh(self,t,dt)
-        
     def stokes_solver(self,dt):
         return stokes_solver(self,dt)
     
-    
+    def slope_solver(self):
+        return slope_solver(self)
+
+    def mesh_solver(self):
+        return mesh_solver(self)

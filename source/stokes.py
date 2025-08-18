@@ -4,7 +4,6 @@ from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
 from ufl import dx, TestFunctions,split,grad, FacetNormal, Measure, SpatialCoordinate, div, inner, sym
-from params import rho_i, rho_w,g
 
 
 def eta(u):
@@ -31,10 +30,10 @@ def stokes_solver(md,dt):
         
         # Neumann condition at ice-water boundary
         x = SpatialCoordinate(md.domain)
-        g_base = -rho_w*g*(x[1])
+        g_base = -md.rho_w*md.g*x[1]
 
         # Body force
-        f = Constant(md.domain,PETSc.ScalarType((0,-rho_i*g)))      
+        f = Constant(md.domain,PETSc.ScalarType((0,-md.rho_i*md.g)))      
 
         # Outward-pointing unit normal to the boundary  
         nu = FacetNormal(md.domain)     
@@ -46,21 +45,10 @@ def stokes_solver(md,dt):
         
         F = 2*eta(u)*inner(sym(grad(u)),sym(grad(v)))*dx
         F += (- div(v)*p + q*div(u))*dx - inner(f, v)*dx
-        F += (g_base+rho_w*g*dt*inner(u,nu))*inner(v,nu)*ds(3)
+        F += (g_base+md.rho_w*md.g*dt*inner(u,nu))*inner(v,nu)*ds(3)
   
         # Solve for N
         problem = NonlinearProblem(F, md.sol, bcs=bcs)
         solver = NewtonSolver(md.comm, problem)
-        
-        # NOTE: this seems to be necessary for first time step...
-        # but may not be optimal ... 
-        # solver.convergence_criterion = 'residual'
-        # ksp = solver.krylov_solver
-        # opts = PETSc.Options()
-        # option_prefix = ksp.getOptionsPrefix()
-        # opts[f"{option_prefix}ksp_type"] = "preonly" #preonly / cg?
-        # opts[f"{option_prefix}pc_type"] = "lu" # ksp ?
-        # opts[f"{option_prefix}pc_factor_mat_solver_type"]="mumps"
-        # ksp.setFromOptions()
 
         return solver

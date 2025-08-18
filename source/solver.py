@@ -1,7 +1,8 @@
 # This file contains the functions needed for solving the subglacial hydrology problem.
 import numpy as np
-from dolfinx.fem import Constant,Expression
+from dolfinx.fem import Constant,Expression, Function
 from dolfinx.log import set_log_level, LogLevel
+from ufl import SpatialCoordinate, Dx
 import sys
 import os
 import shutil
@@ -26,6 +27,7 @@ def solve(md):
     nt = np.size(md.timesteps)
     dt_ = np.abs(md.timesteps[1]-md.timesteps[0])
     dt = Constant(md.domain, dt_)
+    t = Constant(md.domain,md.timesteps[0])
 
     md.comm.barrier()
     # create arrays for saving solution
@@ -64,6 +66,10 @@ def solve(md):
         p_arr = np.zeros((nti,nd))
         z_arr = np.zeros((nti,nd))
         
+        # some other things we want to save
+        residual_arr = np.zeros((nti,nd))
+        
+        
         h,s,x_surfs = get_surfaces(nodes_x,nodes_z)        
         ns = h.size
         h_arr = np.zeros((nti,ns))
@@ -84,8 +90,22 @@ def solve(md):
     w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points())
     p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points())
     
-    solver = md.stokes_solver(dt)
+    # some other things we want to save
+    residual = Function(md.V0)
+    residual_expr = Expression(Dx(Dx(md.sol.sub(0).sub(1),0),0)-Dx(Dx(md.sol.sub(0).sub(1),1),1), md.V0.element.interpolation_points())
     
+    # displacement at upper and lower boundaries
+    x = SpatialCoordinate(md.domain)
+
+    # expressions for updating the domain 
+    dh_expr = Expression(dt*(md.sol.sub(0).sub(1) - md.sol.sub(0).sub(0)*(-md.slope) + md.smb_surf(x[0],t)),md.V0.element.interpolation_points())
+    ds_expr = Expression(dt*(md.sol.sub(0).sub(1) - md.sol.sub(0).sub(0)*md.slope + md.smb_base(x[0],t)),md.V0.element.interpolation_points())
+
+    # define solvers
+    stokes_solver = md.stokes_solver(dt)
+    slope_solver = md.slope_solver()
+    mesh_solver = md.mesh_solver()
+        
     # time-stepping loop
     for i in range(nt):
 
@@ -96,9 +116,10 @@ def solve(md):
         if i>0:
             dt_ = np.abs(md.timesteps[i]-md.timesteps[i-1])
             dt.value = dt_
+            t.value = md.timesteps[i]
     
         # solve for the solution sol = ((u,w),p)
-        niter, converged = solver.solve(md.sol)
+        niter, converged = stokes_solver.solve(md.sol)
         assert (converged)
 
         if converged == False:
@@ -109,6 +130,7 @@ def solve(md):
             md.u.interpolate(u_expr)
             md.w.interpolate(w_expr)
             md.p.interpolate(p_expr)
+            residual.interpolate(residual_expr)
             
             # mask out the ghost points and gather
             u__ = md.comm.gather(md.u.x.array[md.mask],root=0)
@@ -116,6 +138,7 @@ def solve(md):
             p__ = md.comm.gather(md.p.x.array[md.mask],root=0)
             z__ = md.comm.gather(md.z[md.mask],root=0)
             x__ = md.comm.gather(md.x[md.mask],root=0)
+            residual__ = md.comm.gather(residual.x.array[md.mask],root=0)
             
             if md.rank == 0:
                 z__ = np.concatenate(z__)
@@ -132,6 +155,9 @@ def solve(md):
                 p_arr[j,:] = np.concatenate(p__)
                 z_arr[j,:] = z__
                 
+                # some other things we want to save
+                residual_arr[j,:] = np.concatenate(residual__)
+                
                 if i % md.nt_check == 0:
                 # checkpoint saves: e.g., to not wait until
                 # the end of simulation for plotting
@@ -143,11 +169,22 @@ def solve(md):
                     np.save(md.results_name+f'/s.npy',s_arr)
                     np.save(md.results_name+f'/x.npy',x_arr)
                     
+                    # some other things we want to save
+                    np.save(md.results_name+f'/residual.npy',residual_arr)
+                                    
                 j += 1
  
         # update the domain
-        md.update_mesh(md.timesteps[i],dt_)
-                     
+        n0 = slope_solver.solve()
+        md.slope = n0/((1-n0**2)**0.5)
+        md.dh.interpolate(dh_expr)
+        md.ds.interpolate(ds_expr)
+        displacement = mesh_solver.solve()
+        md.domain.geometry.x[:,1] += displacement.x.array
+        
+        # set solution to zero for initial Newton guess at next time step
+        md.sol.x.array[:] = 0
+        md.sol.x.scatter_forward()
     
     # post-processing: put time-slices into big arrays
     if md.rank == 0:
@@ -159,4 +196,7 @@ def solve(md):
         np.save(md.results_name+f'/s.npy',s_arr)
         np.save(md.results_name+f'/x.npy',x_arr)
         
+        # some other things we want to save
+        np.save(md.results_name+f'/residual.npy',residual_arr)
+
     return 
