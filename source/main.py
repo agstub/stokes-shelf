@@ -1,7 +1,5 @@
 # This is a wrapper for solving the ice-shelf stokes-flow problem from command line with MPI
-# See setup_example.py for an exanple of model setup options like bed and surface geometry,
-# meltwater inputs, mesh creation, etc...
-
+# See setup_example.py for an exanple of model setup options 
 import sys
 import importlib
 from mpi4py import MPI

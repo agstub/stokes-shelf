@@ -7,7 +7,6 @@ import sys
 import os
 import shutil
 from pathlib import Path
-from mesh_routine import get_surfaces
 
 def solve(md):
     # solve the hydrology problem given setup file
@@ -46,9 +45,13 @@ def solve(md):
         
     # save nodes so that in post-processing we can create a
     # parallel-to-serial mapping between dof's for plotting
-    nodes_x = md.comm.gather(md.x[md.mask],root=0)
-    nodes_z = md.comm.gather(md.z[md.mask],root=0) 
+    nodes_x = md.comm.gather(md.x[md.mask_dofs],root=0)
+    nodes_z = md.comm.gather(md.z[md.mask_dofs],root=0) 
     md.save_dofmap()
+    
+    h,xh,s,xs = md.get_surfaces()
+    h = md.comm.gather(h,root=0)
+    s = md.comm.gather(s,root=0)  
     
     if md.rank == 0:
         # some io setup
@@ -65,21 +68,25 @@ def solve(md):
         w_arr = np.zeros((nti,nd))
         p_arr = np.zeros((nti,nd))
         z_arr = np.zeros((nti,nd))
+        lapw_arr = np.zeros((nti,nd))
         
         # some other things we want to save
-        residual_arr = np.zeros((nti,nd))
-        
-        
-        h,s,x_surfs = get_surfaces(nodes_x,nodes_z)        
-        ns = h.size
-        h_arr = np.zeros((nti,ns))
-        s_arr = np.zeros((nti,ns))
-        x_arr = np.zeros((nti,ns))
+        # residual_arr = np.zeros((nti,nd))
         
         np.save(md.results_name+'/t.npy',t_i)
         np.save(md.results_name+'/nodes_x.npy',nodes_x)
         np.save(md.results_name+'/nodes_z.npy',nodes_z)
-
+         
+        nd_h = np.concatenate(h).size
+        nd_s = np.concatenate(s).size
+        h_arr = np.zeros((nti,nd_h))
+        xh_arr = np.zeros((nti,nd_h))
+        s_arr = np.zeros((nti,nd_s))
+        xs_arr = np.zeros((nti,nd_s))
+        
+        divuh_arr = np.zeros((nti,nd_h))
+        divus_arr = np.zeros((nti,nd_s))
+        
         # copy setup file into results directory to for plotting/post-processing
         # and to keep record of input 
         shutil.copy(parent_dir+'/setups/{}.py'.format(md.setup_name), md.results_name+'/{}.py'.format(md.setup_name))
@@ -89,10 +96,13 @@ def solve(md):
     u_expr = Expression(md.sol.sub(0).sub(0), md.V0.element.interpolation_points())
     w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points())
     p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points())
+    lapw_expr = Expression(Dx(Dx(md.sol.sub(0).sub(1),0),0), md.V0.element.interpolation_points())
+    
+    lapw = Function(md.V0)
     
     # some other things we want to save
-    residual = Function(md.V0)
-    residual_expr = Expression(Dx(Dx(md.sol.sub(0).sub(1),0),0)-Dx(Dx(md.sol.sub(0).sub(1),1),1), md.V0.element.interpolation_points())
+    divu = Function(md.V0)
+    divu_expr = Expression(Dx(md.sol.sub(0).sub(0),0), md.V0.element.interpolation_points())
     
     # displacement at upper and lower boundaries
     x = SpatialCoordinate(md.domain)
@@ -102,14 +112,14 @@ def solve(md):
     ds_expr = Expression(dt*(md.sol.sub(0).sub(1) - md.sol.sub(0).sub(0)*md.slope + md.smb_base(x[0],t)),md.V0.element.interpolation_points())
 
     # define solvers
-    stokes_solver = md.stokes_solver(dt)
+    stokes_solver = md.stokes_solver(dt,t)
     slope_solver = md.slope_solver()
     mesh_solver = md.mesh_solver()
         
     # time-stepping loop
     for i in range(nt):
 
-        if md.rank == 0 and (i+1)%1==0:
+        if md.rank == 0 and (i+1)%10==0:
             print(f"Time step {i+1} of {nt} completed ({(i+1)/nt*100:.1f}%)", end='\r')
             sys.stdout.flush()
 
@@ -130,33 +140,70 @@ def solve(md):
             md.u.interpolate(u_expr)
             md.w.interpolate(w_expr)
             md.p.interpolate(p_expr)
-            residual.interpolate(residual_expr)
+            
+            lapw.interpolate(lapw_expr)
+                 
+            h,xh,s,xs = md.get_surfaces()
             
             # mask out the ghost points and gather
-            u__ = md.comm.gather(md.u.x.array[md.mask],root=0)
-            w__ = md.comm.gather(md.w.x.array[md.mask],root=0)
-            p__ = md.comm.gather(md.p.x.array[md.mask],root=0)
-            z__ = md.comm.gather(md.z[md.mask],root=0)
-            x__ = md.comm.gather(md.x[md.mask],root=0)
-            residual__ = md.comm.gather(residual.x.array[md.mask],root=0)
+            u__ = md.comm.gather(md.u.x.array[md.mask_dofs],root=0)
+            w__ = md.comm.gather(md.w.x.array[md.mask_dofs],root=0)
+            p__ = md.comm.gather(md.p.x.array[md.mask_dofs],root=0)
+            z__ = md.comm.gather(md.z[md.mask_dofs],root=0)
+            x__ = md.comm.gather(md.x[md.mask_dofs],root=0)
             
+            lapw__ = md.comm.gather(lapw.x.array[md.mask_dofs],root=0)
+            
+            h__ = md.comm.gather(h,root=0)
+            s__ = md.comm.gather(s,root=0)
+            xh__ = md.comm.gather(xh,root=0)
+            xs__ = md.comm.gather(xs,root=0)
+            
+            divu.interpolate(divu_expr)
+            divuh__ = divu.x.array[md.dofs_top]
+            divuh__ = md.comm.gather(divuh__,root=0)
+            
+            divus__ = divu.x.array[md.dofs_base]
+            divus__ = md.comm.gather(divus__,root=0)
+  
             if md.rank == 0:
                 z__ = np.concatenate(z__)
                 x__ = np.concatenate(x__)
                 
-                h,s,x_surfs = get_surfaces(x__,z__)  
-                h_arr[j,:] = h
-                s_arr[j,:] = s
-                x_arr[j,:] = x_surfs
+                h__ = np.concatenate(h__)
+                xh__ = np.concatenate(xh__)
+                s__ = np.concatenate(s__)
+                xs__ = np.concatenate(xs__)
+                
+                divuh__ = np.concatenate(divuh__)
+                divuh__ = divuh__[np.argsort(xh__)]
+                
+                divus__ = np.concatenate(divus__)
+                divus__ = divus__[np.argsort(xs__)]
+                
+                h__ = h__[np.argsort(xh__)]
+                xh__.sort()
+                
+                s__ = s__[np.argsort(xs__)]
+                xs__.sort()
 
                 # save the dof's as numpy arrays
                 u_arr[j,:] = np.concatenate(u__)
                 w_arr[j,:] = np.concatenate(w__)
                 p_arr[j,:] = np.concatenate(p__)
                 z_arr[j,:] = z__
+                lapw_arr[j,:] = np.concatenate(lapw__)
+                
+                h_arr[j,:] = h__
+                s_arr[j,:] = s__
+                xh_arr[j,:] = xh__
+                xs_arr[j,:] = xs__
+                
+                divuh_arr[j,:] = divuh__
+                divus_arr[j,:] = divus__
                 
                 # some other things we want to save
-                residual_arr[j,:] = np.concatenate(residual__)
+                # residual_arr[j,:] = np.concatenate(residual__)
                 
                 if i % md.nt_check == 0:
                 # checkpoint saves: e.g., to not wait until
@@ -167,10 +214,14 @@ def solve(md):
                     np.save(md.results_name+f'/nodes_z.npy',z_arr)
                     np.save(md.results_name+f'/h.npy',h_arr)
                     np.save(md.results_name+f'/s.npy',s_arr)
-                    np.save(md.results_name+f'/x.npy',x_arr)
+                    np.save(md.results_name+f'/xh.npy',xh_arr)
+                    np.save(md.results_name+f'/xs.npy',xs_arr)
                     
                     # some other things we want to save
-                    np.save(md.results_name+f'/residual.npy',residual_arr)
+                    np.save(md.results_name+f'/divuh.npy',divuh_arr)
+                    np.save(md.results_name+f'/divus.npy',divus_arr)
+                    np.save(md.results_name+f'/lapw.npy',lapw_arr)
+                    
                                     
                 j += 1
  
@@ -194,9 +245,13 @@ def solve(md):
         np.save(md.results_name+f'/nodes_z.npy',z_arr)
         np.save(md.results_name+f'/h.npy',h_arr)
         np.save(md.results_name+f'/s.npy',s_arr)
-        np.save(md.results_name+f'/x.npy',x_arr)
-        
+        np.save(md.results_name+f'/xh.npy',xh_arr)
+        np.save(md.results_name+f'/xs.npy',xs_arr)
+
         # some other things we want to save
-        np.save(md.results_name+f'/residual.npy',residual_arr)
+        np.save(md.results_name+f'/divuh.npy',divuh_arr)
+        np.save(md.results_name+f'/divus.npy',divus_arr)
+        np.save(md.results_name+f'/lapw.npy',lapw_arr)
+
 
     return 

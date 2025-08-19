@@ -7,7 +7,6 @@ from dolfinx.fem import Constant,dirichletbc, locate_dofs_topological
 from dolfinx.fem.petsc import LinearProblem
 from petsc4py.PETSc import ScalarType
 from ufl import FacetNormal, TestFunction,TrialFunction, ds, dx, grad, inner
-import numpy as np
 
 # ------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------
@@ -49,17 +48,3 @@ def mesh_solver(md):
 
     return mesh_problem
     
-
-def get_surfaces(X,Z):
-    # retrieve numpy arrays of the upper and lower surface elevations
-    x = np.sort(X)
-    z = Z[np.argsort(X)]
-    x_surfs = np.unique(X)
-    h = np.zeros(x_surfs.size)      # upper surface elevation
-    s = np.zeros(x_surfs.size)      # lower surface elevation
-
-    for i in range(h.size):
-        h[i] = np.max(z[np.where(np.isclose(x_surfs[i],x))])
-        s[i] = np.min(z[np.where(np.isclose(x_surfs[i],x))])
-
-    return h,s,x_surfs

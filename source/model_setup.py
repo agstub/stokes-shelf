@@ -1,4 +1,4 @@
-from dolfinx.fem import Function, functionspace
+from dolfinx.fem import Function, functionspace, locate_dofs_topological
 from basix.ufl import element, mixed_element
 import numpy as np
 from dolfinx.mesh import locate_entities, meshtags
@@ -21,11 +21,11 @@ class model_setup:
         self.x = self.domain.geometry.x[:,0]
         self.z = self.domain.geometry.x[:,1]        
         
-        p_el = element('P',self.domain.basix_cell(),1)     # Pressure p  
-        u_el = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # Velocity u
-        self.V = functionspace(self.domain,mixed_element([u_el,p_el]))  # Function space for (u,p)
-        self.V0 = functionspace(self.domain, ("CG", 1))
-        self.mask = self.ghost_mask(self.V0.dofmap.index_map) 
+        p_el = element('P',self.domain.basix_cell(),1)     # pressure p  
+        u_el = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # velocity u
+        self.V = functionspace(self.domain,mixed_element([u_el,p_el]))  # function space for (u,p)
+        self.V0 = functionspace(self.domain, ("CG", 1)) # function space for saving results
+        self.mask_dofs = self.ghost_mask(self.V0.dofmap.index_map) 
         self.mask_cells = self.ghost_mask(self.domain.topology.index_map(self.domain.topology.dim))
         
         # define solution function and set initial conditions
@@ -36,6 +36,8 @@ class model_setup:
         self.u = Function(self.V0)
         self.w = Function(self.V0)
         self.p = Function(self.V0)
+        
+        self.divu = Function(self.V0)
         
         # functions for updating mesh
         self.slope = Function(self.V0)
@@ -63,6 +65,10 @@ class model_setup:
         self.facets_top = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.TopBoundary(x))
         self.facets_base = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.BaseBoundary(x))
         
+        # dofs
+        self.dofs_top = locate_dofs_topological(self.V0, self.domain.topology.dim-1, self.facets_top)
+        self.dofs_base = locate_dofs_topological(self.V0, self.domain.topology.dim-1, self.facets_base)
+        
         # physical constants
         self.A = params.A         # ice rigidity
         self.n = params.n         # flow-law exponent
@@ -89,7 +95,14 @@ class model_setup:
         if self.rank == 0:
             full_global_dofmap = np.concatenate(all_dofmaps)            
             np.save(self.results_name+'/dofmap.npy',full_global_dofmap)
-                      
+    
+    def get_surfaces(self):
+        h = self.domain.geometry.x[:,1][self.dofs_top]
+        s = self.domain.geometry.x[:,1][self.dofs_base]
+        xh = self.domain.geometry.x[:,0][self.dofs_top]         
+        xs = self.domain.geometry.x[:,0][self.dofs_base] 
+        return h,xh,s,xs
+
     def ghost_mask(self, index_map):
         ghosts = index_map.ghosts
         global_to_local = index_map.global_to_local
@@ -145,8 +158,8 @@ class model_setup:
     def solve(self):
         solve(self)
         
-    def stokes_solver(self,dt):
-        return stokes_solver(self,dt)
+    def stokes_solver(self,dt,t):
+        return stokes_solver(self,dt,t)
     
     def slope_solver(self):
         return slope_solver(self)

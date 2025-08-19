@@ -13,7 +13,7 @@ from scipy.special import erf
 
 def initialize(comm):
     # generate mesh
-    L = 20*1000.0             # Length of the domain
+    L = 10*1000.0             # Length of the domain
     H = 500.0                 # Initial height of the domain
     surf = (1-rho_i/rho_w)*H  # Initial surface in flotation
     base = -(rho_i/rho_w)*H   # Initial base in flotation
@@ -34,13 +34,13 @@ def initialize(comm):
     md.setup_name = os.path.splitext(os.path.basename(__file__))[0]  
     
     # surface mass balance functions
-    m0 =  2 / 3.154e7               # max basal melt(+) or freeze(-) rate (m/yr)
-    stdev = 10*H/3                  # standard deviation for Gaussian basal melt anomaly
+    m0 =  10 / 3.154e7               # max basal melt(+) or freeze(-) rate (m/yr)
+    stdev = 5*H/3                  # standard deviation for Gaussian basal melt anomaly
     md.smb_base = lambda x,t: m0*(np.exp(1)**(-x**2/(stdev**2)))
     md.smb_surf = lambda x,t: m0*np.sqrt(np.pi)*stdev*erf(L/(2*stdev)) / L 
 
     # define time stepping 
-    years = 100
+    years = 10
     nt_per_year = 200.0
     t_final = years*3.154e7
     md.timesteps = np.linspace(0,t_final,int(years*nt_per_year))
