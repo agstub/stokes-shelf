@@ -4,10 +4,6 @@ from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
 from ufl import dx, TestFunctions,split,grad, FacetNormal, Measure, SpatialCoordinate, div, inner, sym
-import params 
-
-def eta(u):
-    return params.eta
 
 def get_bcs(md):
     # assign Dirichlet boundary conditions on lateral boundaries
@@ -43,7 +39,7 @@ def stokes_solver(md,dt,t):
         
         ds = Measure('ds', domain=md.domain, subdomain_data=facet_tag)
         
-        F = 2*eta(u)*inner(sym(grad(u)),sym(grad(v)))*dx
+        F = 2*md.eta*inner(sym(grad(u)),sym(grad(v)))*dx
         F += (- div(v)*p + q*div(u))*dx - inner(f, v)*dx
         F += g_base*inner(v,nu)*ds(3)
   

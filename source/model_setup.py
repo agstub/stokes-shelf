@@ -76,6 +76,7 @@ class model_setup:
         self.rho_i = params.rho_i # ice density
         self.rho_w = params.rho_w # water density
         self.delta = params.delta # flotation factor
+        self.eta = params.eta     # ice viscosity
     
     def save_dofmap(self):
         # Extract the local geometry dofmap for owned cells
