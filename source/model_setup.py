@@ -7,6 +7,7 @@ from stokes import stokes_solver
 from dolfinx.mesh import locate_entities_boundary
 from mesh_routine import mesh_solver, slope_solver
 import params
+from output import output_setup, output_process, output_save
 
 # model input class file
 class model_setup:
@@ -36,9 +37,7 @@ class model_setup:
         self.u = Function(self.V0)
         self.w = Function(self.V0)
         self.p = Function(self.V0)
-        
-        self.divu = Function(self.V0)
-        
+                
         # functions for updating mesh
         self.slope = Function(self.V0)
         self.dh = Function(self.V0)
@@ -77,6 +76,23 @@ class model_setup:
         self.rho_w = params.rho_w # water density
         self.delta = params.delta # flotation factor
         self.eta = params.eta     # ice viscosity
+        
+        # expressions
+        self.u_expr = None
+        self.w_expr = None
+        self.p_expr = None
+        self.dh_expr = None
+        self.ds_expr = None
+        
+        # arrays for daving solutions
+        self.u_arr = None
+        self.w_arr = None
+        self.p_arr = None
+        self.z_arr = None
+        self.h_arr = None
+        self.s_arr = None
+        self.xh_arr = None
+        self.xs_arr = None
     
     def save_dofmap(self):
         # Extract the local geometry dofmap for owned cells
@@ -167,3 +183,12 @@ class model_setup:
 
     def mesh_solver(self):
         return mesh_solver(self)
+    
+    def output_setup(self):
+        output_setup(self)
+    
+    def output_process(self):
+        output_process(self)
+    
+    def output_save(self):
+        output_save(self)

@@ -40,8 +40,8 @@ def initialize(comm):
     md.smb_surf = lambda x,t: m0*np.sqrt(np.pi)*stdev*erf(L/(2*stdev)) / L 
 
     # define time stepping 
-    years = 100
-    nt_per_year = 100.0
+    years = 10
+    nt_per_year = 500.0
     t_final = years*3.154e7
     md.timesteps = np.linspace(0,t_final,int(years*nt_per_year))
 
