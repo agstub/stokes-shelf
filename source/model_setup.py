@@ -1,4 +1,5 @@
-from dolfinx.fem import Function, functionspace, locate_dofs_topological
+from dolfinx.fem import Function, Expression, functionspace, locate_dofs_topological
+from ufl import SpatialCoordinate
 from basix.ufl import element, mixed_element
 import numpy as np
 from dolfinx.mesh import locate_entities, meshtags
@@ -173,16 +174,26 @@ class model_setup:
         return facet_tag
     
     def solve(self):
-        solve(self)
-        
-    def stokes_solver(self,dt,t):
-        return stokes_solver(self,dt,t)
+        solve(self)   
     
-    def slope_solver(self):
-        return slope_solver(self)
+    def set_stokes_solver(self,dt,t):
+        self.stokes_solver = stokes_solver(self,dt,t)
+    
+    def set_slope_solver(self):
+        self.slope_solver = slope_solver(self)
 
-    def mesh_solver(self):
-        return mesh_solver(self)
+    def set_mesh_solver(self):
+        self.mesh_solver = mesh_solver(self)
+    
+    def set_solvers(self,dt,t):
+        # expressions for updating the domain 
+        x = SpatialCoordinate(self.domain)
+        self.dh_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],t)),self.V0.element.interpolation_points())
+        self.ds_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],t)),self.V0.element.interpolation_points())
+
+        self.set_stokes_solver(dt,t)
+        self.set_slope_solver()
+        self.set_mesh_solver() 
     
     def output_setup(self):
         output_setup(self)
@@ -192,3 +203,11 @@ class model_setup:
     
     def output_save(self):
         output_save(self)
+    
+    def update_mesh(self):
+        n0 = self.slope_solver.solve()
+        self.slope = n0/((1-n0**2)**0.5)
+        self.dh.interpolate(self.dh_expr)
+        self.ds.interpolate(self.ds_expr)
+        displacement = self.mesh_solver.solve()
+        self.domain.geometry.x[:,1] += displacement.x.array
