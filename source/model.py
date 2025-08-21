@@ -11,7 +11,7 @@ import params
 from output import output_setup, output_process, output_save
 
 # model input class file
-class model_setup:
+class model:
     def __init__(self, comm, domain,z_b,z_s):
         # mpi 
         self.comm = comm

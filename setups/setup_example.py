@@ -6,9 +6,8 @@ sys.path.insert(0, '../source')
 import numpy as np
 from params import rho_i, rho_w
 from pathlib import Path
-from dolfinx.mesh import create_rectangle,CellType
-import dolfinx.cpp as _cpp
-from model_setup import model_setup
+from dolfinx.mesh import create_rectangle
+from model import model
 from scipy.special import erf
 
 def initialize(comm):
@@ -20,7 +19,7 @@ def initialize(comm):
     p0 = [-L/2.0,base]        # lower left corner of domain
     p1 = [L/2.0,surf]         # upper right corner of domain
     res = [400, 10]           # [nx, nz]
-    domain = create_rectangle(comm,[p0,p1], res)#, cell_type=CellType.triangle, diagonal = _cpp.mesh.DiagonalType.crossed)    
+    domain = create_rectangle(comm,[p0,p1], res)
     
     # need functions of initial surfaces - NOTE: can generalize via interpolation
     # used for marking mesh boundaries
@@ -28,7 +27,7 @@ def initialize(comm):
     z_s = lambda x: 0*x + surf
     
     # initialize model object
-    md = model_setup(comm,domain,z_b,z_s)
+    md = model(comm,domain,z_b,z_s)
     
     # setup name is module name
     md.setup_name = os.path.splitext(os.path.basename(__file__))[0]  
