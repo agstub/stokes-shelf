@@ -56,9 +56,11 @@ class model:
         self.setup_name = None
         
         # time stepping & frequency for saving files
-        self.timesteps = None
-        self.nt_save = None
-        self.nt_check = None
+        self.timesteps = None  # timesteps array
+        self.nt_save = None    # time-save frequency (size of output in time dimension)
+        self.nt_check = None   # checkpoint save frequency
+        self.t = None          # time clock for solver
+        self.dt = None         # timestep size tracker for solver
         
         # boundary facets
         self.facets_left = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.LeftBoundary(x))        
@@ -196,8 +198,8 @@ class model:
         # initialize the solvers
         
         # initialize time-stepping information
-        dt = Constant(self.domain, np.abs(self.timesteps[1]-self.timesteps[0]))
-        t = Constant(self.domain,self.timesteps[0])
+        self.dt = Constant(self.domain, np.abs(self.timesteps[1]-self.timesteps[0]))
+        self.t = Constant(self.domain,self.timesteps[0])
 
         # initialize expressions for displacing mesh
         x = SpatialCoordinate(self.domain)
