@@ -14,7 +14,7 @@ def get_bcs(md):
     bcs = [bc_left,bc_right]
     return bcs
 
-def stokes_solver(md,dt,t):
+def stokes_solver(md):
         # solve the stokes problem for (u,p) = (velocity,pressure)
 
         # define boundary conditions 
@@ -29,7 +29,7 @@ def stokes_solver(md,dt,t):
             
         # Neumann condition at ice-water boundary
         x = SpatialCoordinate(md.domain)
-        g_base = -md.rho_w*md.g*(x[1]+dt*(md.smb_base(x[0],t)-inner(u,nu)))
+        g_base = -md.rho_w*md.g*(x[1]+md.dt*(md.smb_base(x[0],md.t)-inner(u,nu)))
 
         # Body force
         f = Constant(md.domain,PETSc.ScalarType((0,-md.rho_i*md.g)))      

@@ -181,9 +181,9 @@ class model:
         # call the main solve function
         solve(self)   
     
-    def set_stokes_solver(self,dt,t):
+    def set_stokes_solver(self):
         # define stokes solver
-        self.stokes_solver = stokes_solver(self,dt,t)
+        self.stokes_solver = stokes_solver(self)
     
     def set_slope_solver(self):
         # define solver that computes surface slopes
@@ -203,11 +203,11 @@ class model:
 
         # initialize expressions for displacing mesh
         x = SpatialCoordinate(self.domain)
-        self.dh_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],t)),self.V0.element.interpolation_points())
-        self.ds_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],t)),self.V0.element.interpolation_points())
+        self.dh_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],self.t)),self.V0.element.interpolation_points())
+        self.ds_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],self.t)),self.V0.element.interpolation_points())
 
         # set solvers
-        self.set_stokes_solver(dt,t)
+        self.set_stokes_solver()
         self.set_slope_solver()
         self.set_mesh_solver() 
     
