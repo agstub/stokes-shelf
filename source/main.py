@@ -1,4 +1,4 @@
-# This is a wrapper for solving the ice-shelf stokes-flow problem from command line with MPI
+# This is a wrapper for solving the ice-shelf stokes-flow problem from command line
 # See setup_example.py for an exanple of model setup options 
 import sys
 import importlib
@@ -11,7 +11,7 @@ comm = MPI.COMM_WORLD
 # import model setup module from command line argument
 setup = importlib.import_module(sys.argv[1])
 
-# initialize md with MPI context
+# initialize md with MPI comm
 md = setup.initialize(comm)
 
 # setup output arrays, etc...

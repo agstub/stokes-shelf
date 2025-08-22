@@ -20,24 +20,25 @@ def output_setup(md):
     if error_code == 1:
         sys.exit(1)
     
-    # save nodes so that in post-processing we can create a
-    # parallel-to-serial mapping between dof's for plotting
+    # save mesh nodes for plotting
     nodes_x = md.comm.gather(md.x[md.mask_dofs],root=0)
     nodes_z = md.comm.gather(md.z[md.mask_dofs],root=0) 
+    
+    # save dofmap to reconstruct mesh for plotting
     md.save_dofmap()
     
+    # get surface elevations
     h,xh,s,xs = md.get_surfaces()
     h = md.comm.gather(h,root=0)
     s = md.comm.gather(s,root=0)  
     
     if md.rank == 0:
-        # some io setup
         nodes_x = np.concatenate(nodes_x)
         nodes_z = np.concatenate(nodes_z)
         
-        nti = int(md.timesteps.size/md.nt_save)
-        t_i = np.linspace(0,md.timesteps.max(),nti)
-        nd = md.V0.dofmap.index_map.size_global
+        nti = int(md.timesteps.size/md.nt_save)     # number of time slices saved
+        t_i = np.linspace(0,md.timesteps.max(),nti) # time array
+        nd = md.V0.dofmap.index_map.size_global     # number of dofs (CG1)
         
         # arrays for solution dof's at each timestep
         md.u_arr = np.zeros((nti,nd))
@@ -45,35 +46,35 @@ def output_setup(md):
         md.p_arr = np.zeros((nti,nd))
         md.z_arr = np.zeros((nti,nd))
         
-        # some other things we want to save
-        # residual_arr = np.zeros((nti,nd))
-        
         np.save(md.results_name+'/t.npy',t_i)
         np.save(md.results_name+'/nodes_x.npy',nodes_x)
         np.save(md.results_name+'/nodes_z.npy',nodes_z)
          
-        nd_h = np.concatenate(h).size
-        nd_s = np.concatenate(s).size
+        nd_h = np.concatenate(h).size    # number of dofs for surface elevation
+        nd_s = np.concatenate(s).size    # number of dofs for base elevation
         md.h_arr = np.zeros((nti,nd_h))
         md.xh_arr = np.zeros((nti,nd_h))
         md.s_arr = np.zeros((nti,nd_s))
         md.xs_arr = np.zeros((nti,nd_s))
         
         md.j = 0 # index for saving results at nt_save time intervals
-    # create dolfinx expressions for interpolating water flux
+        
+    # create dolfinx expressions for interpolating solutions
     md.u_expr = Expression(md.sol.sub(0).sub(0), md.V0.element.interpolation_points())
     md.w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points())
     md.p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points())
 
 def output_process(md):
-# interpolate water flux components for saving
+    # interpolate solution components for saving
     md.u.interpolate(md.u_expr)
     md.w.interpolate(md.w_expr)
     md.p.interpolate(md.p_expr)
-            
+    
+    # get surface elevations (h, s) and respective 
+    # horizontal coordinates (xh, xs, resp.)
     h,xh,s,xs = md.get_surfaces()
     
-    # mask out the ghost points and gather
+    # mask out the ghost dofs and gather to root
     u__ = md.comm.gather(md.u.x.array[md.mask_dofs],root=0)
     w__ = md.comm.gather(md.w.x.array[md.mask_dofs],root=0)
     p__ = md.comm.gather(md.p.x.array[md.mask_dofs],root=0)
@@ -94,6 +95,7 @@ def output_process(md):
         s__ = np.concatenate(s__)
         xs__ = np.concatenate(xs__)
         
+        # sort upper/lower surface dofs for easy plotting
         h__ = h__[np.argsort(xh__)]
         xh__.sort()
         
@@ -111,9 +113,11 @@ def output_process(md):
         md.xh_arr[md.j,:] = xh__
         md.xs_arr[md.j,:] = xs__
         
+        # update time save index
         md.j += 1
 
 def output_save(md):
+    # save all results arrays in results_name directory
     if md.rank == 0:
         np.save(md.results_name+f'/u.npy',md.u_arr)
         np.save(md.results_name+f'/w.npy',md.w_arr)

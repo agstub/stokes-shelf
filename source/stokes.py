@@ -15,7 +15,7 @@ def get_bcs(md):
     return bcs
 
 def stokes_solver(md,dt,t):
-        # solve the stokes problem for (u,p)
+        # solve the stokes problem for (u,p) = (velocity,pressure)
 
         # define boundary conditions 
         bcs = get_bcs(md)
@@ -36,14 +36,14 @@ def stokes_solver(md,dt,t):
 
         # Mark bounadries of mesh and define a measure for integration
         facet_tag = md.mark_boundary()
-        
         ds = Measure('ds', domain=md.domain, subdomain_data=facet_tag)
         
+        # define weak form residual (F)
         F = 2*md.eta*inner(sym(grad(u)),sym(grad(v)))*dx
         F += (- div(v)*p + q*div(u))*dx - inner(f, v)*dx
         F += g_base*inner(v,nu)*ds(3)
   
-        # Solve for N
+        # Solve (F==0) for (u,p) with Newton's method
         problem = NonlinearProblem(F, md.sol, bcs=bcs)
         solver = NewtonSolver(md.comm, problem)
 

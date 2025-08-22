@@ -1,4 +1,4 @@
-from dolfinx.fem import Function, Expression, functionspace, locate_dofs_topological
+from dolfinx.fem import Constant, Function, Expression, functionspace, locate_dofs_topological
 from ufl import SpatialCoordinate
 from basix.ufl import element, mixed_element
 import numpy as np
@@ -6,7 +6,7 @@ from dolfinx.mesh import locate_entities, meshtags
 from solver import solve
 from stokes import stokes_solver
 from dolfinx.mesh import locate_entities_boundary
-from mesh_routine import mesh_solver, slope_solver
+from mesh_routine import mesh_solver, slope_solver, update_mesh
 import params
 from output import output_setup, output_process, output_save
 
@@ -23,18 +23,19 @@ class model:
         self.x = self.domain.geometry.x[:,0]
         self.z = self.domain.geometry.x[:,1]        
         
-        p_el = element('P',self.domain.basix_cell(),1)     # pressure p  
-        u_el = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # velocity u
-        self.V = functionspace(self.domain,mixed_element([u_el,p_el]))  # function space for (u,p)
-        self.V0 = functionspace(self.domain, ("CG", 1)) # function space for saving results
+        p_el = element('P',self.domain.basix_cell(),1)                                   # pressure element  
+        u_el = element('P',self.domain.basix_cell(),2,shape=(self.domain.geometry.dim,)) # velocity element
+        self.V = functionspace(self.domain,mixed_element([u_el,p_el]))                   # function space for (u,p)
+        self.V0 = functionspace(self.domain, ("CG", 1))                                  # function space for saving results
+        
+        # masks to filter out ghost dofs and ghost cells
         self.mask_dofs = self.ghost_mask(self.V0.dofmap.index_map) 
         self.mask_cells = self.ghost_mask(self.domain.topology.index_map(self.domain.topology.dim))
         
-        # define solution function and set initial conditions
-        # sol = ((u,w),p)
+        # define solution function sol = ((u,w),p) 
         self.sol = Function(self.V)
         
-        # for saving the solution    
+        # functions for saving the solution    
         self.u = Function(self.V0)
         self.w = Function(self.V0)
         self.p = Function(self.V0)
@@ -59,17 +60,17 @@ class model:
         self.nt_save = None
         self.nt_check = None
         
-        # facets 
+        # boundary facets
         self.facets_left = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.LeftBoundary(x))        
         self.facets_right = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.RightBoundary(x))
         self.facets_top = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.TopBoundary(x))
         self.facets_base = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.BaseBoundary(x))
         
-        # dofs
+        # dofs for the upper and lower surfaces
         self.dofs_top = locate_dofs_topological(self.V0, self.domain.topology.dim-1, self.facets_top)
         self.dofs_base = locate_dofs_topological(self.V0, self.domain.topology.dim-1, self.facets_base)
         
-        # physical constants
+        # physical constants; default values in params module
         self.A = params.A         # ice rigidity
         self.n = params.n         # flow-law exponent
         self.g = params.g         # gravitional acceleration
@@ -78,14 +79,14 @@ class model:
         self.delta = params.delta # flotation factor
         self.eta = params.eta     # ice viscosity
         
-        # expressions
+        # expressions for interpolating onto functions 
         self.u_expr = None
         self.w_expr = None
         self.p_expr = None
         self.dh_expr = None
         self.ds_expr = None
         
-        # arrays for daving solutions
+        # arrays for saving solutions
         self.u_arr = None
         self.w_arr = None
         self.p_arr = None
@@ -122,6 +123,7 @@ class model:
         return h,xh,s,xs
 
     def ghost_mask(self, index_map):
+        # create mask for ghosts (e.g., dofs or cells) given index map
         ghosts = index_map.ghosts
         global_to_local = index_map.global_to_local
         ghosts_local = global_to_local(ghosts)
@@ -136,7 +138,7 @@ class model:
         return np.isclose(x[0],self.x.min())
 
     def RightBoundary(self,x):
-        # Left boundary (inflow/outflow)
+        # Right boundary (inflow/outflow)
         return np.isclose(x[0],self.x.max())
     
     def BaseBoundary(self,x):
@@ -174,40 +176,54 @@ class model:
         return facet_tag
     
     def solve(self):
+        # call the main solve function
         solve(self)   
     
     def set_stokes_solver(self,dt,t):
+        # define stokes solver
         self.stokes_solver = stokes_solver(self,dt,t)
     
     def set_slope_solver(self):
+        # define solver that computes surface slopes
         self.slope_solver = slope_solver(self)
 
     def set_mesh_solver(self):
+        # define solver that computes mesh displacement 
+        # functions by solving Laplace's equation
         self.mesh_solver = mesh_solver(self)
     
-    def set_solvers(self,dt,t):
-        # expressions for updating the domain 
+    def set_solvers(self):
+        # initialize the solvers
+        
+        # initialize time-stepping information
+        dt = Constant(self.domain, np.abs(self.timesteps[1]-self.timesteps[0]))
+        t = Constant(self.domain,self.timesteps[0])
+
+        # initialize expressions for displacing mesh
         x = SpatialCoordinate(self.domain)
         self.dh_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],t)),self.V0.element.interpolation_points())
         self.ds_expr = Expression(dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],t)),self.V0.element.interpolation_points())
 
+        # set solvers
         self.set_stokes_solver(dt,t)
         self.set_slope_solver()
         self.set_mesh_solver() 
     
+    def update_mesh(self):
+        # update mesh according to velocity solution,
+        # surface slope, and basal forcing
+        update_mesh(self)
+    
     def output_setup(self):
+        # set up output arrays and expressions for
+        # interpolating solutions
         output_setup(self)
     
     def output_process(self):
+        # interpolate solution and save in arrays
         output_process(self)
     
     def output_save(self):
+        # save soluton arrays as .npy files in 
+        # directory (results_name)
         output_save(self)
-    
-    def update_mesh(self):
-        n0 = self.slope_solver.solve()
-        self.slope = n0/((1-n0**2)**0.5)
-        self.dh.interpolate(self.dh_expr)
-        self.ds.interpolate(self.ds_expr)
-        displacement = self.mesh_solver.solve()
-        self.domain.geometry.x[:,1] += displacement.x.array

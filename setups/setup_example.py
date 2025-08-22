@@ -21,7 +21,7 @@ def initialize(comm):
     res = [400, 10]           # [nx, nz]
     domain = create_rectangle(comm,[p0,p1], res)
     
-    # need functions of initial surfaces - NOTE: can generalize via interpolation
+    # need functions of initial surfaces - note: can generalize via interpolation
     # used for marking mesh boundaries
     z_b = lambda x: 0*x + base
     z_s = lambda x: 0*x + surf
@@ -33,7 +33,7 @@ def initialize(comm):
     md.setup_name = os.path.splitext(os.path.basename(__file__))[0]  
     
     # surface mass balance functions
-    m0 =  10 / 3.154e7               # max basal melt(+) or freeze(-) rate (m/yr)
+    m0 =  10 / 3.154e7             # max basal melt(+) or freeze(-) rate (m/yr)
     stdev = 5*H/3                  # standard deviation for Gaussian basal melt anomaly
     md.smb_base = lambda x,t: m0*(np.exp(1)**(-x**2/(stdev**2)))
     md.smb_surf = lambda x,t: m0*np.sqrt(np.pi)*stdev*erf(L/(2*stdev)) / L 
