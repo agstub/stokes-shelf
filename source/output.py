@@ -36,7 +36,7 @@ def output_setup(md):
         nodes_x = np.concatenate(nodes_x)
         nodes_z = np.concatenate(nodes_z)
         
-        nti = int(md.timesteps.size/md.nt_save)     # number of time slices saved
+        nti = int(md.timesteps.size/md.nt_save)+1   # number of time slices saved
         t_i = np.linspace(0,md.timesteps.max(),nti) # time array
         nd = md.V0.dofmap.index_map.size_global     # number of dofs (CG1)
         

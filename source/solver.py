@@ -16,15 +16,18 @@ def solve(md):
     # s = basal surface elevation [m]
     
     # set dolfinx log output to desired level
-    set_log_level(LogLevel.WARNING)
+    set_log_level(LogLevel.ERROR)
 
     # initialize the solvers
     md.set_solvers()
-        
+    
     # time-stepping loop
+    flag_coldstart = md.max_coldstarts
+    converged = False
+    
     for i in range(md.timesteps.size):
 
-        if md.rank == 0 and (i+1)%10==0:
+        if md.rank == 0 and (i+1)%1==0:
             print(f"Time step {i+1} of {md.timesteps.size} completed ({(i+1)/md.timesteps.size*100:.1f}%)", end='\r')
             sys.stdout.flush()
 
@@ -33,8 +36,22 @@ def solve(md):
             md.t.value = md.timesteps[i]
     
         # solve for the solution sol = ((u,w),p)
-        niter, converged = md.stokes_solver.solve(md.sol)
-        assert (converged)
+        if flag_coldstart<1:
+            niter, converged = md.stokes_solver.solve(md.sol)
+        
+        if flag_coldstart>1 or converged == False:
+            if converged == False:
+                flag_coldstart = md.max_coldstarts
+            
+            # sometimes cold start helps with Newton convergence issues
+            md.sol.x.array[:] = 0
+            md.sol.x.scatter_forward()
+            niter, converged = md.stokes_solver.solve(md.sol)
+            if converged == False:
+                break
+            else:
+                flag_coldstart -= 1
+        
 
         if converged == False:
             break
@@ -51,7 +68,5 @@ def solve(md):
         md.update_mesh()
         
         # set solution to zero for initial Newton guess at next time step
-        md.sol.x.array[:] = 0
-        md.sol.x.scatter_forward()
 
     return 

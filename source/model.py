@@ -50,10 +50,10 @@ class model:
         self.z_s = z_s                   # initial surface elevation [m]
         self.smb_surf = lambda x,t: 0*x  # surface mass balance
         self.smb_base = lambda x,t: 0*x  # basal mass balance
+        self.div_source = 0.0            # divergence source (out-of-plane) to balance melting
 
         # Output names
         self.results_name = None
-        self.setup_name = None
         
         # time stepping & frequency for saving files
         self.timesteps = None  # timesteps array
@@ -61,6 +61,9 @@ class model:
         self.nt_check = None   # checkpoint save frequency
         self.t = None          # time clock for solver
         self.dt = None         # timestep size tracker for solver
+        
+        # max number of times to cold start Newton before trying a warm start
+        self.max_coldstarts = 10 
         
         # boundary facets
         self.facets_left = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.LeftBoundary(x))        
@@ -73,8 +76,6 @@ class model:
         self.dofs_base = locate_dofs_topological(self.V0, self.domain.topology.dim-1, self.facets_base)
         
         # physical constants; default values in params module
-        self.A = params.A         # ice rigidity
-        self.n = params.n         # flow-law exponent
         self.g = params.g         # gravitional acceleration
         self.rho_i = params.rho_i # ice density
         self.rho_w = params.rho_w # water density
