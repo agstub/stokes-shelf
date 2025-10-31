@@ -3,7 +3,7 @@ from dolfinx.fem import Constant,dirichletbc,locate_dofs_topological
 from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
-from ufl import dx, TestFunctions,split,grad, div, inner, sym
+from ufl import dx, TestFunctions,split,grad, div, inner, sym,SpatialCoordinate
 
 def get_bcs(md):
     # assign Dirichlet boundary conditions on lateral boundaries
@@ -35,8 +35,18 @@ def stokes_solver(md):
         # Body force
         f = Constant(md.domain,PETSc.ScalarType((0,-md.rho_i*md.g)))     
         
+        B = (2**((md.n-1.0)/(2*md.n)))*(md.A**(-1/md.n)) # "2*Viscosity" constant in weak form (Pa s^{1/n})
+        eps_v = (2*md.eta/B)**(2.0/(1/md.n-1))           # Flow law regularization parameter 
+                                                         # (bounds viscosity above by md.eta at zero strain rate)
+        
+        # Glen's law: 
+        eta = 0.5*B*((inner(sym(grad(u)),sym(grad(u)))+eps_v)**((1/md.n-1)/2.0)) 
+        
+        if md.n == 1:
+            eta = md.eta
+        
         # define weak form residual (F)
-        F = 2*md.eta*inner(sym(grad(u)),sym(grad(v)))*dx
+        F = 2*eta*inner(sym(grad(u)),sym(grad(v)))*dx
         F += (- div(v)*p + q*(div(u)-md.div_source))*dx - inner(f, v)*dx
 
         # Solve (F==0) for (u,p) with Newton's method

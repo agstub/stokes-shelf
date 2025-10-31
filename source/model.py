@@ -80,7 +80,9 @@ class model:
         self.rho_i = params.rho_i # ice density
         self.rho_w = params.rho_w # water density
         self.delta = params.delta # flotation factor
-        self.eta = params.eta     # ice viscosity
+        self.eta = params.eta     # ice viscosity at zero strain rate
+        self.A = params.A         # flow law coefficient
+        self.n = params.n         # flow law exponent
         
         # expressions for interpolating onto functions 
         self.u_expr = None

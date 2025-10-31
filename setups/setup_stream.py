@@ -9,7 +9,7 @@ from dolfinx.mesh import create_rectangle
 from model import model
 
 def initialize(comm):
-    # generate mesh
+    # generate initial mesh
     H = 400.0                         # Initial height of the domain
     L = 1000.0                        # Length of the domain
     surf = H                          # Initial surface elevation
@@ -19,8 +19,8 @@ def initialize(comm):
     res = [int(L/2.5), int(H/2.5)]    # uniform resolution
     domain = create_rectangle(comm,[p0,p1], res)
     
-    # need functions of initial surfaces - note: can generalize via interpolation
-    # used for marking mesh boundaries
+    # define functions for initial surfaces - note: can generalize to non-flat surfaces via interpolation
+    # important: these are used for marking mesh boundaries
     z_b = lambda x: 0*x + base
     z_s = lambda x: 0*x + surf
     
@@ -28,8 +28,8 @@ def initialize(comm):
     md = model(comm,domain,z_b,z_s)
     
     # surface mass balance functions
-    melt_const = -4/3.154e7      # background surface melt rate [m/s]
-    melt_spike =  -8/3.154e7     # melt rate spikes [m/s]
+    melt_const = -0/3.154e7      # background surface melt rate [m/s]
+    melt_spike =  -1/3.154e7     # melt rate spikes [m/s]
     sigma_spike = 15.0/3         # standard deviation for Gaussian basal melt anomaly [m]
     T = 200                      # spacing between melt spikes [m]
     N = int(0.5*L/T)-1           # ~(1/2)*(number of melt spikes) 
@@ -48,7 +48,10 @@ def initialize(comm):
     
     elif Idea == 1:
         # Idea 1: add bulk source term to try to balance surface melting:
-        md.div_source = -melt_mean/H 
+        # du/dx + dv/dy + dw/dz = 0   in 3D, so in our 2D formulation the divergence condition is
+        # du/dz + dw/dz = -dv/dy
+        # we want to choose a source "div_source" (-dv/dy) that will balance the surface meltnig
+        md.div_source = -melt_mean/H  # note: this is a constant H ...
         md.smb_surf = lambda x,t: smb_surf(x,t)
     
     elif Idea == 2:
@@ -57,11 +60,14 @@ def initialize(comm):
     
     #----------------------------------------------------------------------------------------
 
-    # ice viscosity (Newtonian)
-    md.eta = 1e13 # [Pa s]: default value, can modify if desired
+    # ice viscosity (Glen's law n=3 or Newtonian n=1)
+    # if you set n=1, it will just use md.eta set here as the viscosity (see stokes.py)
+    md.eta = 1e11    # ice viscosity[Pa s] at zero strain rate (max viscosity)
+    md.n = 3         # ice flow law exponent [-]
+    md.A = 2.24e-24  # ice flow law coefficient [Pa^-n s^-1]
 
     # define time stepping 
-    years =  2
+    years =  30
     nt_per_year = 365.0
     t_final = years*3.154e7
     md.timesteps = np.linspace(0,t_final,int(years*nt_per_year))
