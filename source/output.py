@@ -60,9 +60,9 @@ def output_setup(md):
         md.j = 0 # index for saving results at nt_save time intervals
         
     # create dolfinx expressions for interpolating solutions
-    md.u_expr = Expression(md.sol.sub(0).sub(0), md.V0.element.interpolation_points())
-    md.w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points())
-    md.p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points())
+    md.u_expr = Expression(md.sol.sub(0).sub(0), md.V0.element.interpolation_points)
+    md.w_expr = Expression(md.sol.sub(0).sub(1), md.V0.element.interpolation_points)
+    md.p_expr = Expression(md.sol.sub(1), md.V0.element.interpolation_points)
 
 def output_process(md):
     # interpolate solution components for saving

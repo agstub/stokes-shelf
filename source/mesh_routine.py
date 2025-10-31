@@ -17,7 +17,7 @@ def slope_solver(md):
     v_ = TestFunction(md.V0)
     a = inner(u_,v_)*dx+inner(u_,v_)*ds
     l = inner(n0, v_)*ds
-    slope_problem  = LinearProblem(a,l, bcs=[])
+    slope_problem  = LinearProblem(a,l, bcs=[],petsc_options_prefix='slopesolver')
     return slope_problem
 
 
@@ -38,7 +38,7 @@ def mesh_solver(md):
     f = Constant(md.domain, ScalarType(0.0))
     L = f*v*dx
 
-    mesh_problem = LinearProblem(a,L, bcs=bcs)
+    mesh_problem = LinearProblem(a,L, bcs=bcs,petsc_options_prefix='meshsolver')
 
     return mesh_problem
     

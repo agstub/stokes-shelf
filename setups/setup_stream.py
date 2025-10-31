@@ -67,7 +67,7 @@ def initialize(comm):
     md.A = 2.24e-24  # ice flow law coefficient [Pa^-n s^-1]
 
     # define time stepping 
-    years =  30
+    years =  10
     nt_per_year = 365.0
     t_final = years*3.154e7
     md.timesteps = np.linspace(0,t_final,int(years*nt_per_year))

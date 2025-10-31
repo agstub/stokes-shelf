@@ -48,10 +48,22 @@ def stokes_solver(md):
         # define weak form residual (F)
         F = 2*eta*inner(sym(grad(u)),sym(grad(v)))*dx
         F += (- div(v)*p + q*(div(u)-md.div_source))*dx - inner(f, v)*dx
+    
+        # do we need to set this
+        petsc_options = {
+        "snes_type": "newtonls",
+        "snes_linesearch_type": "none",
+        "snes_monitor": None,
+        "snes_atol": 1e-8,
+        "snes_rtol": 1e-8,
+        "snes_stol": 1e-8,
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
+        }  
 
-        # Solve (F==0) for (u,p) with Newton's method
-        problem = NonlinearProblem(F, md.sol, bcs=bcs)
-        solver = NewtonSolver(md.comm, problem)
+        # Solve (F==0) for (u,p) with Newton's method 
+        solver = NonlinearProblem(F, md.sol, bcs=bcs,petsc_options=petsc_options,petsc_options_prefix="stokes")
         solver.error_on_nonconvergence = False
 
         return solver

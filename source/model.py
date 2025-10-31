@@ -206,8 +206,8 @@ class model:
 
         # initialize expressions for displacing mesh
         x = SpatialCoordinate(self.domain)
-        self.dh_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],self.t)),self.V0.element.interpolation_points())
-        self.ds_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],self.t)),self.V0.element.interpolation_points())
+        self.dh_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*(-self.slope) + self.smb_surf(x[0],self.t)),self.V0.element.interpolation_points)
+        self.ds_expr = Expression(self.dt*(self.sol.sub(0).sub(1) - self.sol.sub(0).sub(0)*self.slope + self.smb_base(x[0],self.t)),self.V0.element.interpolation_points)
 
         # set solvers
         self.set_stokes_solver()

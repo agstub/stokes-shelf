@@ -37,7 +37,8 @@ def solve(md):
     
         # solve for the solution sol = ((u,w),p)
         if flag_coldstart<1:
-            niter, converged = md.stokes_solver.solve(md.sol)
+            md.stokes_solver.solve()
+            converged = md.stokes_solver.solver.getConvergedReason()
         
         if flag_coldstart>1 or converged == False:
             if converged == False:
@@ -46,7 +47,9 @@ def solve(md):
             # sometimes cold start helps with Newton convergence issues
             md.sol.x.array[:] = 0
             md.sol.x.scatter_forward()
-            niter, converged = md.stokes_solver.solve(md.sol)
+            md.stokes_solver.solve()
+            converged = md.stokes_solver.solver.getConvergedReason()
+            
             if converged == False:
                 break
             else:
