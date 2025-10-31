@@ -36,9 +36,11 @@ def stokes_solver(md):
         f = Constant(md.domain,PETSc.ScalarType((0,-md.rho_i*md.g)))     
         
         B = (2**((md.n-1.0)/(2*md.n)))*(md.A**(-1/md.n)) # "2*Viscosity" constant in weak form (Pa s^{1/n})
-        eps_v = (2*md.eta/B)**(2.0/(1/md.n-1))           # Flow law regularization parameter 
-                                                         # (bounds viscosity above by md.eta at zero strain rate)
-        
+        if md.n>1:
+            eps_v = (2*md.eta/B)**(2.0/(1/md.n-1))           # Flow law regularization parameter 
+        else:                                                # (bounds viscosity above by md.eta at zero strain rate)
+            eps_v = 1e-17
+            
         # Glen's law: 
         eta = 0.5*B*((inner(sym(grad(u)),sym(grad(u)))+eps_v)**((1/md.n-1)/2.0)) 
         
