@@ -46,11 +46,11 @@ class model:
         self.ds = Function(self.V0)
 
         # Physical input functions
-        self.z_b = z_b                   # initial bed elevation [m]
-        self.z_s = z_s                   # initial surface elevation [m]
-        self.smb_surf = lambda x,t: 0*x  # surface mass balance
-        self.smb_base = lambda x,t: 0*x  # basal mass balance
-        self.div_source = 0.0            # divergence source (out-of-plane) to balance melting
+        self.z_b = z_b                      # initial bed elevation [m]
+        self.z_s = z_s                      # initial surface elevation [m]
+        self.smb_surf = lambda x,t: 0*x     # surface mass balance
+        self.smb_base = lambda x,t: 0*x     # basal mass balance
+        self.div_source = lambda x,z,t: 0*t # divergence source (out-of-plane) to balance melting
 
         # Output names
         self.results_name = None
@@ -63,7 +63,7 @@ class model:
         self.dt = None         # timestep size tracker for solver
         
         # max number of times to cold start Newton before trying a warm start
-        self.max_coldstarts = 10 
+        self.max_coldstarts = 4 
         
         # boundary facets
         self.facets_left = locate_entities_boundary(self.domain, self.domain.topology.dim-1, lambda x: self.LeftBoundary(x))        

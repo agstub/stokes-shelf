@@ -40,8 +40,9 @@ def initialize(comm):
 
     #----------------------------------------------------------------------------------------
     # Trying some different setups here to see what results in steady-state:
-    Idea = 0
+    Idea = 3
     
+    # get vertical coordinate of mesh
     if Idea == 0:
         # Idea 0: do nothing--only use the original melting term (can't reach steady-state):
         md.smb_surf = lambda x,t: smb_surf(x,t)
@@ -51,18 +52,26 @@ def initialize(comm):
         # du/dx + dv/dy + dw/dz = 0   in 3D, so in our 2D formulation the divergence condition is
         # du/dz + dw/dz = -dv/dy
         # we want to choose a source "div_source" (-dv/dy) that will balance the surface meltnig
-        md.div_source = -melt_mean/H  # note: this is a constant H ...
+        md.div_source = lambda x,z,t: -melt_mean/H  # note: this is a constant H ...
         md.smb_surf = lambda x,t: smb_surf(x,t)
     
     elif Idea == 2:
         # Idea 2: subtract off mean surface melt to try to balance:
         md.smb_surf = lambda x,t: smb_surf(x,t) - melt_mean 
+        
+    elif Idea == 3:
+        # space and time-varying divergence source 
+        md.smb_surf = lambda x,t: smb_surf(x,t)
+        a  = -melt_mean/H
+        b = 0
+        pmin = lambda a,b: 0.5*(a + b - ((a-b)**2)**0.5) # min function
+        md.div_source = lambda x,z,t: b + a*(1+pmin(t/(10*3.154e7), 1))*z 
     
     #----------------------------------------------------------------------------------------
 
     # ice viscosity (Glen's law n=3 or Newtonian n=1)
     # if you set n=1, it will just use md.eta set here as the viscosity (see stokes.py)
-    md.eta = 1e11    # ice viscosity[Pa s] at zero strain rate (max viscosity)
+    md.eta = 1e13    # ice viscosity[Pa s] at zero strain rate (max viscosity)
     md.n = 3         # ice flow law exponent [-]
     md.A = 2.24e-24  # ice flow law coefficient [Pa^-n s^-1]
 

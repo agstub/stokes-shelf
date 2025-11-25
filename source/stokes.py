@@ -1,9 +1,8 @@
 # This file contains the functions needed for solving the stokes flow problem
 from dolfinx.fem import Constant,dirichletbc,locate_dofs_topological
 from dolfinx.fem.petsc import NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
-from ufl import dx, TestFunctions,split,grad, div, inner, sym,SpatialCoordinate
+from ufl import dx, TestFunctions,split,grad, div, inner, sym, SpatialCoordinate
 
 def get_bcs(md):
     # assign Dirichlet boundary conditions on lateral boundaries
@@ -32,6 +31,8 @@ def stokes_solver(md):
         (u,p) = split(md.sol)
         (v,q) = TestFunctions(md.V)
         
+        x = SpatialCoordinate(md.domain)
+        
         # Body force
         f = Constant(md.domain,PETSc.ScalarType((0,-md.rho_i*md.g)))     
         
@@ -49,7 +50,7 @@ def stokes_solver(md):
         
         # define weak form residual (F)
         F = 2*eta*inner(sym(grad(u)),sym(grad(v)))*dx
-        F += (- div(v)*p + q*(div(u)-md.div_source))*dx - inner(f, v)*dx
+        F += (- div(v)*p + q*(div(u)-md.div_source(x[0],x[1],md.t)))*dx - inner(f, v)*dx
     
         # do we need to set this
         petsc_options = {
