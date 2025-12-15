@@ -6,7 +6,7 @@ from dolfinx.mesh import locate_entities, meshtags
 from solver import solve
 from stokes import stokes_solver
 from dolfinx.mesh import locate_entities_boundary
-from mesh_routine import mesh_solver, slope_solver, update_mesh
+from mesh_routine import mesh_solver, slope_solver, update_mesh, update_thickness
 import params
 from output import output_setup, output_process, output_save
 
@@ -51,6 +51,8 @@ class model:
         self.smb_surf = lambda x,t: 0*x     # surface mass balance
         self.smb_base = lambda x,t: 0*x     # basal mass balance
         self.div_source = lambda x,z,t: 0*t # divergence source (out-of-plane) to balance melting
+        
+        self.H = Function(self.V0)          # time varying ice thickness [m]
 
         # Output names
         self.results_name = None
@@ -232,3 +234,7 @@ class model:
         # save soluton arrays as .npy files in 
         # directory (results_name)
         output_save(self)
+    
+    def update_thickness(self):
+        # update ice thickness function
+        update_thickness(self)

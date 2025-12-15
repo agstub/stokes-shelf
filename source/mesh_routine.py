@@ -3,10 +3,11 @@
 # to the solution and mass-balance forcings 
 #-------------------------------------------------------------------------------------
 
-from dolfinx.fem import Constant,dirichletbc, locate_dofs_topological
+from dolfinx.fem import Constant,dirichletbc
 from dolfinx.fem.petsc import LinearProblem
 from petsc4py.PETSc import ScalarType
 from ufl import FacetNormal, TestFunction,TrialFunction, ds, dx, grad, inner
+import numpy as np
 
 # ------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------
@@ -51,3 +52,9 @@ def update_mesh(md):
     md.ds.interpolate(md.ds_expr)
     displacement = md.mesh_solver.solve()
     md.domain.geometry.x[:,1] += displacement.x.array
+    
+def update_thickness(md):
+    h,xh,s,xs = md.get_surfaces()    
+    md.H.x.array[:] = (np.interp(md.x,np.sort(xh),h[np.argsort(xh)]) 
+    -np.interp(md.x,np.sort(xs),s[np.argsort(xs)])) 
+    return 

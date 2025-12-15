@@ -40,7 +40,7 @@ def initialize(comm):
 
     #----------------------------------------------------------------------------------------
     # Trying some different setups here to see what results in steady-state:
-    Idea = 3
+    Idea = 4
     
     # get vertical coordinate of mesh
     if Idea == 0:
@@ -60,12 +60,17 @@ def initialize(comm):
         md.smb_surf = lambda x,t: smb_surf(x,t) - melt_mean 
         
     elif Idea == 3:
-        # space and time-varying divergence source 
+        # Idea 3: space and time-varying divergence source 
         md.smb_surf = lambda x,t: smb_surf(x,t)
         a  = -melt_mean/H
         b = 0
         pmin = lambda a,b: 0.5*(a + b - ((a-b)**2)**0.5) # min function
         md.div_source = lambda x,z,t: b + a*(1+pmin(t/(10*3.154e7), 1))*z 
+    
+    elif Idea == 4:
+        # Idea 4: same as idea 1 but with time-varying H
+        md.div_source = lambda x,z,t: -melt_mean/md.H  # note: time-varying H updated during run
+        md.smb_surf = lambda x,t: smb_surf(x,t)
     
     #----------------------------------------------------------------------------------------
 

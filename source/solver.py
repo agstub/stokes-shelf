@@ -70,6 +70,9 @@ def solve(md):
         # update the domain
         md.update_mesh()
         
+        # update ice thickness function
+        md.update_thickness()
+        
         # set solution to zero for initial Newton guess at next time step
 
     return 
